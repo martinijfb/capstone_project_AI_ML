@@ -1,0 +1,128 @@
+# Capstone Project: Black-Box Optimisation (BBO)
+
+## Context
+
+This is a capstone project for the Imperial College ML/AI programme (Modules 12–25). The goal is to find the maximum of 8 unknown black-box functions. Any ML technique can be used — the project spans the entire programme and you're encouraged to apply methods as you learn them.
+
+## Rules
+
+- **One query per function per week** — submitted through the Emeritus capstone portal
+- **All functions are maximisation problems**
+- Functions increase in dimensionality: F1-F2 (2D), F3 (3D), F4-F5 (4D), F6 (5D), F7 (6D), F8 (8D)
+- Perfect solutions are NOT expected — the grading values thoughtful process, iteration, and reflection
+- Input format: `x1-x2-x3-...-xn` — each value 0.000000 to 0.999999, exactly 6 decimal places, hyphen-separated, no spaces
+- Reflection must be posted on the discussion board (under 700 words)
+
+## Project Structure
+
+```
+capstone_project_AI_ML/
+├── data/                     # raw data, grows each week
+│   ├── function_1/
+│   │   ├── initial_inputs.npy
+│   │   └── initial_outputs.npy
+│   └── ...
+├── notebooks/                # one notebook per week, covers all 8 functions
+│   ├── week_01.ipynb
+│   └── ...
+├── src/                      # reusable code across weeks
+│   ├── utils.py
+│   └── optimizers.py
+├── weekly_queries/           # formatted submissions per week
+│   ├── week_01.md
+│   └── ...
+├── reflections/              # weekly write-ups
+│   ├── week_01.md
+│   └── ...
+├── suggestions/              # per-week recommendations for the next week
+│   ├── suggestions_for_week_02.md
+│   └── ...
+└── plots/                    # saved figures organized by week
+    ├── week_01/
+    └── ...
+```
+
+## Weekly Pipeline
+
+### Phase 1: Setup
+1. `/new-week XX` — create notebook and folders
+2. `/status` — see current state of all 8 functions, track improvements
+
+### Phase 2: Analysis (per function)
+3. `/analyze N` — full analysis pipeline:
+   - Visualise: parallel coords, correlations, top vs bottom boxplots
+   - Feature importance robustness (with/without best point)
+   - Model grid search with LOOCV RMSE (compare against baseline)
+   - Model convergence analysis per dimension (STRONG/moderate/weak)
+   - Apply decision framework to choose query
+
+### Phase 3: Submission
+4. `/submit` — validate format + save to `weekly_queries/week_XX.md`
+5. `/reflect` — draft reflection answering the 3 portal questions, save to `reflections/week_XX.md`
+6. Submit queries on portal + post reflection on discussion board
+
+### Phase 4: Results (next week)
+7. `/add-results` — append new data, compare predicted vs actual Y
+8. Review `suggestions/suggestions_for_week_XX.md` for pre-planned strategies
+
+## Decision Framework (developed in Week 01)
+
+For each function, follow this process:
+
+1. **If no models beat baseline** (e.g. F3 with 15pts/3D): use Y-weighted centroid of top 4
+2. **If one model dominates** (e.g. F4 SVR at 63%): trust that model if suggestion is interior
+3. **If models are moderate** (e.g. F6 SVR at 30%): use best model, verify against centroid
+4. **If models are weak but have consensus on some dims** (e.g. F7): centroid + override only STRONG consensus dimensions
+5. **If models are strong but disagree on some dims** (e.g. F8): trust best model on dimensions with strong correlation + robust importance + consensus; centroid on the rest
+
+**Always check:**
+- Does the suggestion hit a boundary? (any dim < 0.02 or > 0.98) → reject
+- Is the feature importance robust? (re-run RF without best point — if importance drops >50%, it was inflated by one outlier)
+- Do multiple model configs agree? (convergence spread < 0.2 = strong, < 0.4 = moderate, > 0.4 = weak)
+
+## Techniques Available (by Programme Module)
+
+### Already covered (Modules 1–12)
+- **Probability & statistics**: Monte Carlo simulations, MLE, bootstrapping, distributions
+- **Regression**: linear regression, correlation, feature engineering
+- **Evaluation**: confusion matrix, precision/recall, F1, RMSE, k-fold cross-validation
+- **Oversampling**: SMOTE, handling class imbalance
+- **KNN**: distance-based prediction, optimal k selection, normalisation
+- **Decision trees**: entropy, Gini index, pruning, depth selection
+- **Ensemble methods**: bagging, random forests, boosting (XGBoost)
+- **Naïve Bayes**: probabilistic classification, Laplace smoothing
+- **Bayesian optimisation**: GP surrogate, acquisition functions (UCB, EI, PI)
+
+### Coming in later modules (13–24)
+- **Logistic regression** (Module 13)
+- **SVMs**: kernel functions, soft-margin, multi-class (Module 14)
+- **Neural networks**: gradient descent, backpropagation, TensorFlow (Module 15)
+- **Deep learning**: PyTorch, advanced architectures (Module 16)
+- **CNNs**: convolutional neural networks (Module 17)
+- **Hyperparameter tuning**: systematic methods and strategies (Module 18)
+- **LLMs & transformers**: attention mechanisms, tokenisation (Modules 19–20)
+- **Transparency & interpretability**: bias detection, model cards (Module 21)
+- **Clustering**: hierarchical, k-means (Module 22)
+- **PCA**: dimensionality reduction (Module 23)
+- **Reinforcement learning**: multi-armed bandits, Q-learning, MDPs (Module 24)
+
+### General strategies (always available)
+- **Random search**: np.random.uniform — simple baseline
+- **Grid search**: evaluate on a dense grid — good for low dimensions
+- **Manual reasoning**: scatter plots, heatmaps, domain intuition
+- **Perturbation**: search near the current best with small changes
+- **Ensemble approaches**: combine multiple methods, take the best suggestion
+- **Space-filling**: Voronoi largest empty circle, Latin Hypercube Sampling
+- **Y-weighted centroid**: average of top performers, weighted by output value
+- **Model consensus**: trust models only on dimensions where multiple configs agree
+
+## Technical Notes
+
+- **Colorblind-safe palettes**: always use coolwarm/viridis cmaps and Wong palette (#0072B2, #D55E00, #009E73, #E69F00, #CC79A7, #56B4E9)
+- For 2D functions (F1, F2): scatter plots and heatmaps are powerful — visualise before deciding
+- For higher dimensions: parallel coordinates, per-dimension correlations, top-vs-bottom boxplots
+- Each function has different characteristics — one strategy won't fit all
+- Track what works per function and adapt individually
+- The summary cell in each notebook must HARDCODE all query values (self-contained)
+- Use LOOCV with RMSE (not R²) for model evaluation — R² is undefined for 1-sample LOO folds
+- Suppress LOO warnings: `warnings.filterwarnings('ignore', message='R.*score is not well-defined')`
