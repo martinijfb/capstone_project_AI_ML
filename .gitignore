@@ -13,3 +13,6 @@ __pycache__/
 
 # Claude Code
 .claude/
+
+# Draft files
+capstone_readme_draft.*
