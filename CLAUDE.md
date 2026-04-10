@@ -58,8 +58,9 @@ capstone_project_AI_ML/
 
 ### Phase 3: Submission
 4. `/submit` — validate format + save to `weekly_queries/week_XX.md`
-5. `/reflect` — draft reflection answering the 3 portal questions, save to `reflections/week_XX.md`
-6. Submit queries on portal + post reflection on discussion board
+5. `/reflect` — draft reflection answering the portal questions, save to `reflections/week_XX.md`
+6. `/update-readme` — update Section 4 of README.md with current week's strategies
+7. Submit queries on portal + post reflection on discussion board
 
 ### Phase 4: Results (next week)
 7. `/add-results` — append new data, compare predicted vs actual Y
@@ -82,7 +83,7 @@ For each function, follow this process:
 
 ## Techniques Available (by Programme Module)
 
-### Already covered (Modules 1–12)
+### Already covered (Modules 1–14)
 - **Probability & statistics**: Monte Carlo simulations, MLE, bootstrapping, distributions
 - **Regression**: linear regression, correlation, feature engineering
 - **Evaluation**: confusion matrix, precision/recall, F1, RMSE, k-fold cross-validation
@@ -92,10 +93,10 @@ For each function, follow this process:
 - **Ensemble methods**: bagging, random forests, boosting (XGBoost)
 - **Naïve Bayes**: probabilistic classification, Laplace smoothing
 - **Bayesian optimisation**: GP surrogate, acquisition functions (UCB, EI, PI)
+- **Logistic regression**: binary/multiclass classification
+- **SVMs**: kernel functions (RBF), soft-margin, classification for BBO region identification
 
-### Coming in later modules (13–24)
-- **Logistic regression** (Module 13)
-- **SVMs**: kernel functions, soft-margin, multi-class (Module 14)
+### Coming in later modules (15–24)
 - **Neural networks**: gradient descent, backpropagation, TensorFlow (Module 15)
 - **Deep learning**: PyTorch, advanced architectures (Module 16)
 - **CNNs**: convolutional neural networks (Module 17)
@@ -115,6 +116,8 @@ For each function, follow this process:
 - **Space-filling**: Voronoi largest empty circle, Latin Hypercube Sampling
 - **Y-weighted centroid**: average of top performers, weighted by output value
 - **Model consensus**: trust models only on dimensions where multiple configs agree
+- **Classifier + regression decomposition**: when regression fails, split into sign classification (SVM) + log-space regression to find promising regions
+- **Linear model filtering**: exclude Ridge/SVR from ensembles when they extrapolate to boundary corners
 
 ## Technical Notes
 
@@ -123,6 +126,6 @@ For each function, follow this process:
 - For higher dimensions: parallel coordinates, per-dimension correlations, top-vs-bottom boxplots
 - Each function has different characteristics — one strategy won't fit all
 - Track what works per function and adapt individually
-- The summary cell in each notebook must HARDCODE all query values (self-contained)
+- The summary cell should reference `next_query_N` variables from analysis cells — do NOT hardcode duplicate values
 - Use LOOCV with RMSE (not R²) for model evaluation — R² is undefined for 1-sample LOO folds
 - Suppress LOO warnings: `warnings.filterwarnings('ignore', message='R.*score is not well-defined')`
