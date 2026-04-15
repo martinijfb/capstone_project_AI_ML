@@ -40,19 +40,21 @@ The limited budget means brute-force grid search is infeasible. Each query must 
 My approach centres on a **validate-then-trust** framework: fit multiple surrogate models, validate each with Leave-One-Out Cross-Validation (LOOCV RMSE), and only trust predictions from models that demonstrably beat the baseline (predicting the mean).
 
 **ML methods used:**
-- **GridSearchCV** with LOOCV across 6 model families: Ridge, KNN, Random Forest, SVR (RBF), Gradient Boosting, and Gaussian Process (Matern kernel)
-- **Feature importance robustness checks**: re-running Random Forest importance without the best point to detect single-point inflation
-- **SVM classification**: splitting failed regression problems into sign classification + log-space regression to identify promising search regions
-- **Model convergence analysis**: measuring per-dimension spread of model suggestions to assess consensus strength
+- **GridSearchCV** with LOOCV across 7 model families: Ridge, KNN, Random Forest, SVR (RBF), Gradient Boosting, Gaussian Process (Matern and RBF), and PyTorch MLP surrogates with regularisation variants (plain / dropout / weight-decay / ensemble)
+- **Feature importance robustness checks**: re-running Random Forest importance without the best point or known outliers to detect single-point inflation
+- **SVM classification + log-magnitude regression**: splitting failed regression problems into sign classification plus log-space regression to identify promising regions
+- **Model convergence analysis**: measuring per-dimension spread of model suggestions to assess consensus
+- **NN gradient analysis** via `torch.autograd` for directional signals at the current best point
 
 **Strategy selection per function:**
-Rather than applying one method everywhere, the strategy adapts based on model reliability. When a dominant model achieves strong LOOCV improvement, I trust its suggestion directly. When multiple models beat baseline but disagree on some dimensions, I use a hybrid: centroid of top performers on uncertain dimensions, model consensus only where all models agree. When no model beats baseline, I fall back to Y-weighted centroids or space-filling exploration.
+The strategy adapts based on model reliability. When a dominant model achieves strong LOOCV improvement, I trust its suggestion if it stays interior. When multiple models beat baseline but disagree on some dimensions, I use a hybrid: centroid of top performers on uncertain dimensions, model consensus where all models agree. When no model beats baseline, I fall back to Y-weighted centroids or balanced Voronoi space-filling.
 
 **Exploration vs exploitation:**
-The balance is calibrated per function by validation performance. Functions with strong, validated models receive exploitation-focused queries. Functions where models fail get exploration via Voronoi space-filling or data-driven centroids. The key principle: exploitation only makes sense where models have earned trust through cross-validation.
+The balance is calibrated per function by validation performance. Strong-model functions get exploitation; weak-model functions get exploration via balanced Voronoi (which penalises both cluster-adjacency and boundary-proximity, avoiding the corner-picks that naive Voronoi produces). The principle: exploitation only makes sense where models have earned trust through cross-validation.
 
-**Key learnings after 3 rounds:**
-- Linear models consistently extrapolate to boundary corners — now systematically filtered from ensembles
-- Feature correlations can be inflated by single outliers — robustness checks are essential before trusting any signal
+**Key learnings after 4 rounds:**
+- Linear models extrapolate to boundary corners — systematically filtered from ensembles
+- Single outliers can inflate correlations and importances — robustness checks before trusting any signal
 - Function sensitivity varies enormously — some peaks are so narrow that tiny perturbations cause large drops
-- The validate-then-trust framework prevents overfitting to unreliable models while allowing strong models to guide the search
+- When multiple non-linear models push the same dimension to a boundary AND the correlation sign agrees, the signal is real — I clip to the observed top-K min/max rather than extrapolate to extremes
+- NN surrogates beat baseline on most functions but rarely top the leaderboard at these sample sizes — their main value is gradient analysis, not prediction

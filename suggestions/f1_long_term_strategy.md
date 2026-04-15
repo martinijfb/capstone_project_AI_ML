@@ -2,47 +2,79 @@
 
 ## Problem
 
-After 12 queries, ALL Y values are essentially zero (best is 7.7e-16). No model beats baseline on raw Y. The function likely has a very localised peak that we haven't found. We are data-starved and the current sample is heavily biased toward the high x1/high x2 quadrant (6 of 12 points).
+F1 is a 2D function where Y values span ~120 orders of magnitude: two large negatives (~-1e-3) and everything else numerically ~0 (positives range 1e-7 down to 1e-124). No raw regressor beats `Y.std()` baseline — SVR, GP, RF, GB, Ridge, KNN, NN all fail. The function likely has a very localized peak we haven't found.
 
-## Phase 1: Systematic Space-Filling (Weeks 04–07, if week 03 classifier fails)
+**On outliers — F1 vs F3:** F1 has two "outliers" with |Y| ~10¹⁸× larger than the rest (pt at (0.42, 0.46) Y=-6.63e-3 and pt at (0.65, 0.68) Y=-3.61e-3). **These are SIGNAL, not noise — do NOT remove them.** They are the only points with non-trivial |Y| and define the entire classifier boundary and log-SVR magnitude. This is the opposite of F3 where the outlier distorted x3 correlations. Always verify whether an outlier is signal or distortion before removing — in F1 they stay.
 
-Spend 3–4 weeks using Voronoi largest empty circle to fill coverage gaps. The goal is NOT to find the peak directly, but to:
+## Primary Approach: Classifier + Log-SVR Combined (ALWAYS RUN)
 
-1. Build a well-distributed dataset across the full [0,1]^2 space
-2. Discover which regions are positive vs negative (feed the classifier)
-3. Ensure every quadrant has at least 3 points
+Every week, **first try this approach** before anything else:
 
-### Priority regions (current coverage):
-- **Low x1, high x2 (Q2):** 1 point only (pt1 at 0.32, 0.76) — needs 2+ more
-- **High x1, low x2 (Q4):** 1 point only (pt4 at 0.84, 0.26) — needs 2+ more
-- **Low x1, low x2 (Q3):** 4 points — adequate but clustered
-- **High x1, high x2 (Q1):** 6 points — oversampled, skip
+1. **Classifier** on `sign(Y >= 0)`:
+   - Grid-search SVC(kernel='rbf') across C ∈ {1, 10, 100} via LOO accuracy
+   - Also compare Logistic Regression and KNN as sanity check
+   - Target ≥85% LOO accuracy before fully trusting the classifier
+2. **Log-SVR** on `log10(|Y| + 1e-200)`:
+   - GridSearchCV over C ∈ {0.1, 1, 10, 100} and gamma ∈ {'scale', 'auto'}
+   - This captures magnitude structure — where is the function most active?
+3. **Combined score** across dense grid: `P(positive) × normalized log|Y|`
+   - Best candidate = `argmax(combined | P(positive) > 0.5)`
 
-### Week-by-week plan:
-- **Week 04:** Voronoi largest empty circle (currently ~(0.66, 0.44), radius 0.245)
-- **Week 05:** Next largest empty circle (recompute after week 04 point added)
-- **Week 06:** Target whichever quadrant still has fewest points
-- **Week 07:** Final space-filling point if needed
+### When to trust the combined candidate
 
-After each week, recompute the sign classifier to see if the boundary becomes clearer.
+| Condition | Action |
+|---|---|
+| Classifier LOO ≥ 85% AND candidate is far from known negatives (> 2 × avg pairwise distance) | **Use combined candidate** |
+| Classifier LOO ≥ 85% but candidate sits on the sign boundary | Mistrust — log-SVR extrapolates magnitude from negatives → fall back to balanced Voronoi |
+| Classifier LOO < 85% | Not enough sign-structure learnable → fall back to balanced Voronoi |
+| Combined predicted log|Y| is consistent with observed positive magnitudes | Trust |
+| Combined predicted log|Y| is much higher than any observed positive | Mistrust (extrapolation from negatives) → fall back |
 
-## Phase 2: Return to Classifier + Log-SVR Combined (Week 08+)
+### Sanity checks to print every week
 
-With ~17 well-distributed points:
-1. Re-train the SVM classifier on sign(Y) — should have much better accuracy with balanced coverage
-2. Re-fit log-space SVR — better signal mapping with more data
-3. Use the combined score (P(positive) * signal strength) to identify the peak candidate
-4. The decision boundary will be much more reliable with 3-4x more data in undersampled regions
+- Log-SVR prediction at the **current best point** vs. actual log|Y|. If off by >1 order of magnitude, log-SVR is miscalibrated.
+- Top-K grid-cells by raw log|Y| prediction: are they near known negatives (bad) or interior to positive region (good)?
+- Distance from combined candidate to nearest known negative.
 
-## Why This Works
+## Fallback: Balanced Voronoi Space-Filling
 
-- In 2D, 16-17 points with good coverage gives roughly 4x4 grid density — enough for a classifier to draw a meaningful boundary
-- Each Voronoi point is guaranteed to be maximally distant from all existing samples — no wasted queries
-- The classifier only needs to know positive vs negative, not the actual Y value — even ~0 values with known sign are useful training data
-- By the time we return to the combined model, we'll have seen enough of the space to know where the positive region actually is
+When the combined approach isn't trustworthy (see conditions above), space-fill to build better training data for next week.
+
+**Important**: use **balanced Voronoi** — `max(min(dist_to_data, dist_to_boundary))` — NOT raw Voronoi. Raw Voronoi picks corners, which are degenerate:
+- BBO functions often behave atypically at edges
+- A corner only probes "one side" of the decision boundary
+- Low information value for the classifier
+
+The balanced metric penalizes corners equally with cluster-proximity, producing a genuinely interior point.
+
+### Quadrant coverage priority
+
+| Quadrant | Priority |
+|---|---|
+| Q1 (hi x1, hi x2) | Low — oversampled (6+ pts) |
+| Q2 (lo x1, hi x2) | **High** — undersampled |
+| Q3 (lo x1, lo x2) | Medium |
+| Q4 (hi x1, lo x2) | **High** — undersampled |
+
+Pick the undersampled quadrant with the largest balanced-empty-circle radius.
 
 ## Exit Conditions
 
-- **If any Voronoi point returns a large positive Y (> 0.01):** immediately switch to exploitation around that point — we found the peak region
-- **If the classifier boundary becomes very clear (>85% LOO accuracy) before week 08:** can return to combined approach early
-- **If all ~17 points remain ~0:** the function may genuinely not have a significant peak, and the best strategy is to accept ~0 as our result
+- **If any query returns a large positive Y (> 0.01)**: immediately switch to exploitation around that point — we found the peak region. Ignore the space-filling plan.
+- **If all ~17 points remain ~0 after Phase 1**: the function may genuinely not have a significant peak — accept ~0 as our result and allocate the remaining weekly queries to other functions that have more room to improve.
+
+## Weekly Decision Tree
+
+```
+For F1, every week:
+  1. Run model grid search (Ridge/KNN/RF/SVR/GB/GP/NN) — confirm baseline fails (expected)
+  2. Run classifier + log-SVR combined approach
+  3. Check trust conditions for combined candidate
+     ├── Trustworthy → use combined candidate
+     └── Not trustworthy → balanced Voronoi in most undersampled quadrant
+  4. Update this file if any assumptions change
+```
+
+## Reference: observed positives (as of W04)
+
+All 9 positive Y values are ≤ 4e-7 — effectively zero. The log-SVR has no real positive-magnitude training signal, which is why it extrapolates magnitude from the two large negatives. Until we observe a non-trivial positive, the combined approach's log|Y| predictions in positive regions are unreliable.

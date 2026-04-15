@@ -27,7 +27,14 @@ capstone_project_AI_ML/
 │   └── ...
 ├── src/                      # reusable code across weeks
 │   ├── utils.py
-│   └── optimizers.py
+│   ├── optimizers.py
+│   └── nn_models.py          # PyTorch MLP surrogates (Week 04+)
+├── models/                   # saved NN weights + metadata (Week 04+)
+│   ├── week_04/
+│   │   ├── function_1_nn.pt
+│   │   └── ...
+│   └── week_XX/              # subfolder per week — models don't clash across weeks
+
 ├── weekly_queries/           # formatted submissions per week
 │   ├── week_01.md
 │   └── ...
@@ -46,10 +53,12 @@ capstone_project_AI_ML/
 
 ### Phase 1: Setup
 1. `/new-week XX` — create notebook and folders
-2. `/status` — see current state of all 8 functions, track improvements
+2. `/add-results` — append last week's portal response (if not already done)
+3. `/status` — see current state of all 8 functions, track improvements
+4. *(Week 04+)* `/train-nns` — train NN surrogates for all 8 functions (saves to `models/`)
 
 ### Phase 2: Analysis (per function)
-3. `/analyze N` — full analysis pipeline:
+5. `/analyze N` — full analysis pipeline:
    - Visualise: parallel coords, correlations, top vs bottom boxplots
    - Feature importance robustness (with/without best point)
    - Model grid search with LOOCV RMSE (compare against baseline)
@@ -66,20 +75,25 @@ capstone_project_AI_ML/
 7. `/add-results` — append new data, compare predicted vs actual Y
 8. Review `suggestions/suggestions_for_week_XX.md` for pre-planned strategies
 
-## Decision Framework (developed in Week 01)
+## Decision Framework (developed in Week 01, extended W03-W04)
 
 For each function, follow this process:
 
-1. **If no models beat baseline** (e.g. F3 with 15pts/3D): use Y-weighted centroid of top 4
+1. **If no models beat baseline** (e.g. F3 with 15pts/3D): use Y-weighted centroid of top 4. If top-K is clustered in one region, use **balanced Voronoi** instead.
 2. **If one model dominates** (e.g. F4 SVR at 63%): trust that model if suggestion is interior
 3. **If models are moderate** (e.g. F6 SVR at 30%): use best model, verify against centroid
 4. **If models are weak but have consensus on some dims** (e.g. F7): centroid + override only STRONG consensus dimensions
 5. **If models are strong but disagree on some dims** (e.g. F8): trust best model on dimensions with strong correlation + robust importance + consensus; centroid on the rest
 
+**F1 special case**: F1 has tiny positive magnitudes and two large negatives — no raw regressor beats baseline. Always run the **classifier + log-SVR combined** approach first (see `suggestions/f1_long_term_strategy.md`). Fall back to **balanced Voronoi** only if the combined candidate sits at the sign boundary or log-SVR is miscalibrated.
+
+**NN surrogates (Week 04+)**: `/train-nns` pre-trains an MLP surrogate per function and saves to `models/week_XX/function_N_nn.pt`. In Step 3 of `/analyze`, load via `nn_models.load_nn(N)` and treat as an additional model family — same baseline-beating gate, same boundary filtering, same convergence check as sklearn models. Extract `meta['gradient_at_best']` for reflection Q5 (steepest-gradient dimensions).
+
 **Always check:**
 - Does the suggestion hit a boundary? (any dim < 0.02 or > 0.98) → reject
 - Is the feature importance robust? (re-run RF without best point — if importance drops >50%, it was inflated by one outlier)
 - Do multiple model configs agree? (convergence spread < 0.2 = strong, < 0.4 = moderate, > 0.4 = weak)
+- Is space-filling a corner? If using Voronoi, always use the **balanced** variant that penalizes boundary-proximity equally with cluster-proximity
 
 ## Techniques Available (by Programme Module)
 
@@ -113,11 +127,13 @@ For each function, follow this process:
 - **Manual reasoning**: scatter plots, heatmaps, domain intuition
 - **Perturbation**: search near the current best with small changes
 - **Ensemble approaches**: combine multiple methods, take the best suggestion
-- **Space-filling**: Voronoi largest empty circle, Latin Hypercube Sampling
+- **Space-filling (balanced Voronoi)**: `max(min(dist_to_data, dist_to_boundary))` — penalizes corners. NEVER use raw Voronoi for BBO; it picks corners.
+- **Latin Hypercube Sampling**: alternative space-filling
 - **Y-weighted centroid**: average of top performers, weighted by output value
 - **Model consensus**: trust models only on dimensions where multiple configs agree
-- **Classifier + regression decomposition**: when regression fails, split into sign classification (SVM) + log-space regression to find promising regions
+- **Classifier + log-SVR decomposition (F1 primary)**: split into sign classification (SVM C=10) + log-space regression on log|Y|. Combined score = P(positive) × normalized log|Y|. Trust only if classifier LOO ≥85% AND candidate is far from known negatives. See `suggestions/f1_long_term_strategy.md`.
 - **Linear model filtering**: exclude Ridge/SVR from ensembles when they extrapolate to boundary corners
+- **NN surrogates** (`/train-nns`): pre-train MLPs per function, save to `models/week_XX/`. `/analyze` auto-loads them. Test 4 regularization variants (plain/dropout/weight-decay/ensemble) and 2 widths via 5-fold CV.
 
 ## Technical Notes
 
