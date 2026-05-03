@@ -37,27 +37,26 @@ The limited budget means brute-force grid search is infeasible. Each query must 
 
 ## Section 4: Technical Approach
 
-My approach centres on a **validate-then-trust** framework: fit multiple surrogate models, validate each with Leave-One-Out Cross-Validation (LOOCV RMSE), and only trust predictions from models that demonstrably beat the baseline (predicting the mean).
+My approach centres on a **validate-then-trust** framework: fit multiple surrogate models, validate each via Leave-One-Out Cross-Validation (LOOCV RMSE), and only trust models that beat the baseline (predicting the mean).
 
 **ML methods used:**
-- **GridSearchCV** with LOOCV across 7 model families: Ridge, KNN, Random Forest, SVR (RBF), Gradient Boosting, Gaussian Process (Matern and RBF), and PyTorch MLP surrogates with regularisation variants (plain / dropout / weight-decay / ensemble)
-- **Feature importance robustness checks**: re-running Random Forest importance without the best point or known outliers to detect single-point inflation
-- **SVM classification + log-magnitude regression**: splitting failed regression problems into sign classification plus log-space regression to identify promising regions
-- **Model convergence analysis**: measuring per-dimension spread of model suggestions to assess consensus
-- **Outlier-suggestion filter**: excluding any model whose argmax is a spatial outlier from the ensemble, even when it beats baseline
-- **NN gradient analysis** via `torch.autograd` for directional signals at the current best point
+- **GridSearchCV with LOOCV** across 7 families: Ridge, KNN, Random Forest, SVR (RBF), Gradient Boosting, Gaussian Process with Matern at ν ∈ {0.5, 1.5, 2.5} and RBF kernels, plus PyTorch MLP surrogates. Kernel smoothness is a CV-chosen hyperparameter, not hard-coded.
+- **Feature importance robustness checks**: re-fitting Random Forest without the best point to flag single-point inflation.
+- **SVM classifier + log-magnitude regression**: splitting failed regression into sign classification plus log-space regression on log|Y|.
+- **Outlier-suggestion filter**: any model whose argmax is a spatial outlier is dropped from the ensemble.
+- **Boundary-consensus rule (refined)**: when 3+ non-linear models push a dimension to its edge AND the correlation sign matches, clip to max(top-K extremum, ensemble interior). Safety without freezing dimensions where valid models support a step.
+- **NN gradient analysis** via `torch.autograd` for directional signals at the current best.
 
 **Strategy selection per function:**
-The strategy adapts based on model reliability. When a dominant model achieves strong LOOCV improvement, I trust its suggestion if it stays interior. When multiple models beat baseline but disagree on some dimensions, I use a hybrid: centroid of top performers on uncertain dimensions, model consensus where all models agree. When no model beats baseline, I fall back to Y-weighted centroids or balanced Voronoi space-filling.
+A dominant model with strong LOOCV improvement is trusted if interior. Multiple models with mixed agreement get a hybrid: top-K Y-weighted centroid on uncertain dimensions, ensemble where models agree. No model beats baseline → balanced Voronoi space-filling.
 
 **Exploration vs exploitation:**
-The balance is calibrated per function by validation performance. Strong-model functions get exploitation; sparse-baseline functions get informed exploration that combines a sign classifier on Y, a log-magnitude regressor on log|Y|, and balanced Voronoi targeting the most undersampled region. The principle: exploitation only makes sense where models have earned trust through cross-validation.
+Calibrated per function by validation performance. Strong-model functions get exploitation; sparse-baseline functions get informed exploration combining a sign classifier on Y, a log-magnitude regressor on log|Y|, and Voronoi targeting of undersampled regions.
 
-**Key learnings after 5 rounds:**
-- Linear models extrapolate to boundary corners — systematically filtered from ensembles
-- Single outliers can inflate correlations and importances — robustness checks before trusting any signal
-- Function sensitivity varies enormously — some peaks are so narrow that tiny perturbations cause large drops
-- When multiple non-linear models push the same dimension to a boundary AND the correlation sign agrees, the signal is real — I clip to the observed top-K min/max rather than extrapolate to extremes
-- The boundary-consensus rule self-corrects: if a previous clip didn't improve Y, model agreement weakens the next round and the rule stops firing
-- NN-vs-ensemble gradient disagreement is itself information — when the NN's accuracy is below the dominant model's, the disagreement is a flag about reliability, not a vote to average in
-- NN surrogates beat baseline on most functions but rarely top the leaderboard at these sample sizes — their main value is gradient analysis, not prediction
+**Key learnings after 6 rounds:**
+- Linear models extrapolate to boundary corners and are systematically filtered.
+- Single outliers inflate correlations and importances; robustness checks come first.
+- Some peaks are so narrow that tiny perturbations cause large drops.
+- Kernel smoothness is per-function: rougher Matern (ν=0.5) wins on most 4–6D functions; smoother kernels win on the 8D function where the landscape itself is smoother.
+- The boundary-consensus rule self-corrects across weeks AND respects interior model agreement (refined this week).
+- NN surrogates rarely top the leaderboard at these sample sizes; their main value is the autograd gradient as a directional hint.
