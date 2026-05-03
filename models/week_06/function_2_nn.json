@@ -1,0 +1,62 @@
+{
+  "variant": "dropout",
+  "hidden": 16,
+  "d_in": 2,
+  "cv_rmse": 0.20893218167011623,
+  "baseline_rmse": 0.22925677391793473,
+  "beats_baseline": true,
+  "all_configs": [
+    {
+      "hidden": 16,
+      "variant": "dropout",
+      "rmse": 0.20893218167011623
+    },
+    {
+      "hidden": 32,
+      "variant": "dropout",
+      "rmse": 0.2199439875430058
+    },
+    {
+      "hidden": 16,
+      "variant": "ensemble",
+      "rmse": 0.24662277719072329
+    },
+    {
+      "hidden": 32,
+      "variant": "wd",
+      "rmse": 0.2801460892910272
+    },
+    {
+      "hidden": 32,
+      "variant": "plain",
+      "rmse": 0.2819661876866193
+    },
+    {
+      "hidden": 16,
+      "variant": "wd",
+      "rmse": 0.28491429706054533
+    },
+    {
+      "hidden": 32,
+      "variant": "ensemble",
+      "rmse": 0.29281094335694857
+    },
+    {
+      "hidden": 16,
+      "variant": "plain",
+      "rmse": 0.3012107033191098
+    }
+  ],
+  "gradient_at_best": [
+    0.6893823146820068,
+    0.4122110903263092
+  ],
+  "x_best": [
+    0.701898,
+    0.953338
+  ],
+  "y_best": 0.6658079917111239,
+  "y_mean": 0.2843370883909639,
+  "y_std": 0.22925678391793472,
+  "n_ensemble": 1
+}
