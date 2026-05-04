@@ -50,8 +50,11 @@ class TurboState:
             self.failure_tolerance = int(math.ceil(max(4.0, float(self.dim))))
 
 
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
+
 def _state_path(n: int) -> Path:
-    return Path(f"data/function_{n}/turbo_state.json")
+    return _PROJECT_ROOT / f"data/function_{n}/turbo_state.json"
 
 
 def load_state(n: int, default_for_d: int) -> TurboState:
