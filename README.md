@@ -43,7 +43,7 @@ My approach centres on a **validate-then-trust** framework: fit multiple surroga
 - **GridSearchCV with LOOCV** across 7 sklearn families: Ridge, KNN, Random Forest, SVR (RBF), Gradient Boosting, Gaussian Process with Matern at ν ∈ {0.5, 1.5, 2.5} and RBF, plus PyTorch MLP surrogates. Kernel smoothness is a CV-chosen hyperparameter.
 - **Output warping (Yeo-Johnson)**: `WarpedRegressor` fits any sklearn estimator on a more Gaussian-shaped Y. Helps on skewed but bounded targets; falls back gracefully on extreme dynamic ranges.
 - **BoTorch second opinions**: `SingleTaskGP` with Normalize/Standardize transforms, plus GP-UCB (β decaying 2.0→0.5 across the project) and qLogNoisyEI as alternative candidate generators, used as informational signals.
-- **TuRBO-1 trust region**: deliberate framework deviation when the standard step is too conservative on a still-climbing function. Trust-region length adapts via success/failure counters; state persists across weeks via JSON.
+- **TuRBO-1 trust region (multi-kernel TS)**: deliberate framework deviation when the standard step is too conservative on a still-climbing function. Fits four GPs (Matern 0.5/1.5/2.5, RBF), draws Thompson samples from each at shared candidates, picks argmax across the (kernel, candidate) grid. Trust-region length adapts via success/failure counters; state persists across weeks via JSON.
 - **Feature importance robustness, sign classifier + log-SVR for F1, outlier-suggestion filter, boundary-consensus rule, NN autograd gradients** continue from earlier weeks.
 
 **Strategy selection per function:**

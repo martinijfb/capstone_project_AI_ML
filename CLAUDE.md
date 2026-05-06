@@ -134,6 +134,9 @@ For each function, follow this process:
 - **Classifier + log-SVR decomposition (F1 primary)**: split into sign classification (SVM C=10) + log-space regression on log|Y|. Combined score = P(positive) × normalized log|Y|. Trust only if classifier LOO ≥85% AND candidate is far from known negatives. See `suggestions/f1_long_term_strategy.md`.
 - **Linear model filtering**: exclude Ridge/SVR from ensembles when they extrapolate to boundary corners
 - **NN surrogates** (`/train-nns`): pre-train MLPs per function, save to `models/week_XX/`. `/analyze` auto-loads them. Test 4 regularization variants (plain/dropout/weight-decay/ensemble) and 2 widths via 5-fold CV.
+- **TuRBO-1 with multi-kernel Thompson sampling** (`src/turbo.py`, W7+): trust-region BO that fits 4 GPs (Matern 0.5/1.5/2.5, RBF), draws TS from each at the same shared candidates, and picks argmax across the (kernel, candidate) grid. TR ARD-stretched by canonical Matern 2.5 lengthscales. State persists across weeks via JSON. Use only when the standard ensemble step is `< 0.005` AND the trajectory hasn't saturated, OR after 2 consecutive regressions on a function.
+- **BoTorch second opinions** (`src/botorch_helpers.py`, W7+): `SingleTaskGP` (Normalize/Standardize transforms) + GP-UCB (β decaying 2.0→0.5 across 12 weeks) + qLogNoisyEI as alternative candidate generators. Run as informational signals; trust only when the framework would otherwise reject (e.g. all sklearn GPs fail baseline) or as alternate-direction evidence on weak-correlation dims.
+- **WarpedRegressor (Yeo-Johnson)** (`src/output_warping.py`, W7+): wraps any sklearn estimator and fits on a more Gaussian-shaped Y. Helps where Y is skewed but bounded (F3); fails on Y ranges spanning many orders of magnitude (F1).
 
 ## Technical Notes
 
