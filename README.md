@@ -43,19 +43,17 @@ My approach centres on a **validate-then-trust** framework: fit multiple surroga
 - **GridSearchCV with LOOCV** across 7 sklearn families: Ridge, KNN, Random Forest, SVR (RBF), Gradient Boosting, Gaussian Process with Matern at ν ∈ {0.5, 1.5, 2.5} and RBF, plus PyTorch MLP surrogates. Kernel smoothness is a CV-chosen hyperparameter.
 - **Output warping (Yeo-Johnson)**: `WarpedRegressor` fits any sklearn estimator on a more Gaussian-shaped Y. Helps on skewed but bounded targets; falls back gracefully on extreme dynamic ranges.
 - **BoTorch second opinions**: `SingleTaskGP` with Normalize/Standardize transforms, plus GP-UCB (β decaying 2.0→0.5 across the project) and qLogNoisyEI as alternative candidate generators, used as informational signals.
-- **TuRBO-1 trust region**: deliberate framework deviation when the standard step is too conservative on a still-climbing function. Trust-region length adapts via success/failure counters; state persists across weeks via JSON.
+- **TuRBO-1 trust region (multi-kernel TS)**: deliberate framework deviation, triggered by (a) standard step < 0.005 on a climbing trajectory, (b) 2 consecutive regressions, or (c) plateau-break override after extended refinement. Fits four GPs (Matern 0.5/1.5/2.5, RBF), draws Thompson samples from each at shared candidates, picks argmax across the (kernel, candidate) grid. Trust-region length adapts via success/failure counters; state persists across weeks via JSON.
 - **Feature importance robustness, sign classifier + log-SVR for F1, outlier-suggestion filter, boundary-consensus rule, NN autograd gradients** continue from earlier weeks.
 
 **Strategy selection per function:**
-A dominant model with strong LOOCV improvement is trusted if interior. Mixed agreement → hybrid: top-K Y-weighted centroid on uncertain dimensions, ensemble where models agree. No model beats baseline → balanced Voronoi space-filling. Switch to TuRBO when the standard ensemble step is < 0.005 on a non-saturated trajectory.
+A dominant model with strong LOOCV improvement is trusted if interior. Mixed agreement → hybrid: top-K Y-weighted centroid on uncertain dimensions, ensemble where models agree. No model beats baseline → balanced Voronoi space-filling, OR deliberate gradient-climb from the highest-information +/− neighbour pair when Voronoi has stopped extracting signal. Switch to TuRBO on the trigger conditions above.
 
-**Exploration vs exploitation:**
-Calibrated per function by validation performance. Strong-model functions get exploitation; sparse-baseline functions get informed exploration combining classifier and Voronoi targeting; plateauing climbers get a trust-region bet.
-
-**Key learnings after 7 rounds:**
+**Key learnings after 8 rounds:**
 - Linear models extrapolate to boundary corners and are systematically filtered.
-- Single outliers inflate correlations and importances; robustness checks come first.
-- Kernel smoothness is per-function: rougher Matern (ν=0.5) wins on most 4–6D functions; smoother kernels win on the 8D function where the landscape itself is smoother.
+- Single outliers can flip correlations from strong-looking to noise; WITH/WITHOUT outlier check is now standard in every per-function Cell A (lesson from a W8 catch mid-analysis).
+- Kernel smoothness is per-function: rougher Matern wins on most 4–6D functions, smoother on 8D. Multi-kernel TS picks different winning kernels per function in practice — the kernel mixture earns its cost.
 - Output warping helps where Y is skewed but bounded; fails on Y ranges spanning many orders of magnitude.
 - The boundary-consensus rule self-corrects across weeks AND respects interior model agreement.
 - NN surrogates rarely top the leaderboard at these sample sizes; their main value is the autograd gradient as a directional hint.
+- After long stretches without improvement, a deliberate manual or TuRBO bet extracts more information than another conservative refinement step.
