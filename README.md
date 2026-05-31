@@ -47,13 +47,15 @@ My approach centres on a **validate-then-trust** framework: fit multiple surroga
 - **Feature importance robustness, sign classifier + log-SVR for F1, outlier-suggestion filter, boundary-consensus rule, NN autograd gradients** continue from earlier weeks.
 
 **Strategy selection per function:**
-A dominant model with strong LOOCV improvement is trusted if interior. Mixed agreement → hybrid: top-K Y-weighted centroid on uncertain dimensions, ensemble where models agree. No model beats baseline → balanced Voronoi space-filling, OR deliberate gradient-climb from the highest-information +/− neighbour pair when Voronoi has stopped extracting signal. Switch to TuRBO on the trigger conditions above.
+Multi-model consensus drives interior queries (single-model dominance, even at high CV margin, can still fail catastrophically). Mixed agreement → hybrid: top-K Y-weighted centroid on uncertain dimensions, ensemble where models agree. No model beats baseline → balanced Voronoi space-filling, OR deliberate gradient-climb from the highest-information +/− neighbour pair when Voronoi has stopped extracting signal. When a function plateaus inside its noise floor, a deliberate repeat of the current best is the highest-information query available. Switch to TuRBO on the trigger conditions above.
 
-**Key learnings after 8 rounds:**
+**Key learnings after 9 rounds:**
 - Linear models extrapolate to boundary corners and are systematically filtered.
 - Single outliers can flip correlations from strong-looking to noise; WITH/WITHOUT outlier check is now standard in every per-function Cell A (lesson from a W8 catch mid-analysis).
 - Kernel smoothness is per-function: rougher Matern wins on most 4–6D functions, smoother on 8D. Multi-kernel TS picks different winning kernels per function in practice — the kernel mixture earns its cost.
+- Single-model dominance is not a sufficient signal. A model with a 49.9% relative CV gap over its runner-up still produced a -69% Y crash when trusted alone; multi-model agreement is now the gate.
 - Output warping helps where Y is skewed but bounded; fails on Y ranges spanning many orders of magnitude.
 - The boundary-consensus rule self-corrects across weeks AND respects interior model agreement.
 - NN surrogates rarely top the leaderboard at these sample sizes; their main value is the autograd gradient as a directional hint.
 - After long stretches without improvement, a deliberate manual or TuRBO bet extracts more information than another conservative refinement step.
+- TuRBO's value is asymmetric: clear payoffs when real structure is there to find (regression streaks broken, climbing trajectories continued), but it can fall off when the function is genuinely flat. The state machine contracts the trust region after failures so the next bet is cheaper.
