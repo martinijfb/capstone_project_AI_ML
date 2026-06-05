@@ -1,11 +1,11 @@
 {
   "dim": 5,
-  "L": 0.8,
+  "L": 0.4,
   "L_init": 0.8,
   "L_min": 0.0078125,
   "L_max": 1.6,
   "success_counter": 0,
-  "failure_counter": 3,
+  "failure_counter": 1,
   "success_tolerance": 3,
   "failure_tolerance": 5,
   "best_value": -0.11733179368197222,

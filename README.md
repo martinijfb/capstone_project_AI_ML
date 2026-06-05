@@ -1,5 +1,10 @@
 # Black-Box Optimisation Capstone Project
 
+## Transparency documents
+
+- [Datasheet for the BBO data set](docs/datasheet.md)
+- [Model card for the optimisation approach](docs/model_card.md)
+
 ## Section 1: Project Overview
 
 This project tackles the optimisation of 8 unknown black-box functions. The goal is to find the input values that maximise each function's output, with only one query allowed per function per week.
@@ -37,25 +42,27 @@ The limited budget means brute-force grid search is infeasible. Each query must 
 
 ## Section 4: Technical Approach
 
-My approach centres on a **validate-then-trust** framework: fit multiple surrogate models, validate each via Leave-One-Out Cross-Validation (LOOCV RMSE), and only trust models that beat the baseline (predicting the mean).
+My approach centres on a **validate-then-trust** framework: fit multiple surrogate models, validate each via Leave-One-Out Cross-Validation (LOOCV RMSE), and only trust models that beat the standard-deviation baseline.
 
 **ML methods used:**
-- **GridSearchCV with LOOCV** across 7 sklearn families: Ridge, KNN, Random Forest, SVR (RBF), Gradient Boosting, Gaussian Process with Matern at ν ∈ {0.5, 1.5, 2.5} and RBF, plus PyTorch MLP surrogates. Kernel smoothness is a CV-chosen hyperparameter.
-- **Output warping (Yeo-Johnson)**: `WarpedRegressor` fits any sklearn estimator on a more Gaussian-shaped Y. Helps on skewed but bounded targets; falls back gracefully on extreme dynamic ranges.
-- **BoTorch second opinions**: `SingleTaskGP` with Normalize/Standardize transforms, plus GP-UCB (β decaying 2.0→0.5 across the project) and qLogNoisyEI as alternative candidate generators, used as informational signals.
-- **TuRBO-1 trust region (multi-kernel TS)**: deliberate framework deviation, triggered by (a) standard step < 0.005 on a climbing trajectory, (b) 2 consecutive regressions, or (c) plateau-break override after extended refinement. Fits four GPs (Matern 0.5/1.5/2.5, RBF), draws Thompson samples from each at shared candidates, picks argmax across the (kernel, candidate) grid. Trust-region length adapts via success/failure counters; state persists across weeks via JSON.
-- **Feature importance robustness, sign classifier + log-SVR for F1, outlier-suggestion filter, boundary-consensus rule, NN autograd gradients** continue from earlier weeks.
+- **GridSearchCV with LOOCV** across 7 sklearn families: Ridge, KNN, Random Forest, SVR (RBF), Gradient Boosting, Gaussian Process with Matern at ν ∈ {0.5, 1.5, 2.5} and RBF, plus PyTorch MLP surrogates.
+- **Output warping (Yeo-Johnson)** for skewed but bounded targets; **BoTorch second opinions** (`SingleTaskGP` + GP-UCB + qLogNoisyEI) as informational signals.
+- **TuRBO-1 trust region (multi-kernel TS)**: fits four GPs (Matern 0.5/1.5/2.5, RBF), draws Thompson samples at shared candidates, picks argmax across the (kernel, candidate) grid. Trust-region length adapts via success/failure counters; state persists across weeks via JSON.
+- **F1-specific classifier + log-SVR** decomposition. **Feature importance robustness, outlier-suggestion filter, boundary-consensus rule, NN autograd gradients** continue from earlier weeks.
 
 **Strategy selection per function:**
-Multi-model consensus drives interior queries (single-model dominance, even at high CV margin, can still fail catastrophically). Mixed agreement → hybrid: top-K Y-weighted centroid on uncertain dimensions, ensemble where models agree. No model beats baseline → balanced Voronoi space-filling, OR deliberate gradient-climb from the highest-information +/− neighbour pair when Voronoi has stopped extracting signal. When a function plateaus inside its noise floor, a deliberate repeat of the current best is the highest-information query available. Switch to TuRBO on the trigger conditions above.
+By week 10 the eight functions cluster into three regimes:
+- **Climbing**: TuRBO continuation. Multi-kernel TS picks a different winning kernel per function and per week.
+- **Models converged**: per-dim hybrid — ensemble where models agree (STRONG-consensus dims), top-K centroid where they disagree, with deterministic anchors where the data shows one.
+- **Stalled**: smallest available step around the current best, leaning on cross-model consensus rather than any single confident pick.
 
-**Key learnings after 9 rounds:**
-- Linear models extrapolate to boundary corners and are systematically filtered.
-- Single outliers can flip correlations from strong-looking to noise; WITH/WITHOUT outlier check is now standard in every per-function Cell A (lesson from a W8 catch mid-analysis).
-- Kernel smoothness is per-function: rougher Matern wins on most 4–6D functions, smoother on 8D. Multi-kernel TS picks different winning kernels per function in practice — the kernel mixture earns its cost.
-- Single-model dominance is not a sufficient signal. A model with a 49.9% relative CV gap over its runner-up still produced a -69% Y crash when trusted alone; multi-model agreement is now the gate.
-- Output warping helps where Y is skewed but bounded; fails on Y ranges spanning many orders of magnitude.
-- The boundary-consensus rule self-corrects across weeks AND respects interior model agreement.
+Triggers for switching to TuRBO: standard step < 0.005 on a climbing trajectory, or 2 consecutive regressions.
+
+**Key learnings after 10 rounds:**
+- Single-model dominance is not sufficient even at very high CV margin; multi-model consensus is the standing gate.
+- Kernel smoothness is per-function. Multi-kernel TS earns its cost because the winning kernel changes by function and by week.
+- Transform research on F1 found `log|Y|` fits +68% above baseline vs raw Y at +47% — magnitude is smooth, sign is chaotic. Signed-log extrapolation produces nonsense argmax candidates.
+- A deliberate small-step query near the current best resolves "refinement vs noise" ambiguity for the entire downstream search.
+- Output warping helps where Y is skewed but bounded; useless on extreme dynamic ranges.
 - NN surrogates rarely top the leaderboard at these sample sizes; their main value is the autograd gradient as a directional hint.
-- After long stretches without improvement, a deliberate manual or TuRBO bet extracts more information than another conservative refinement step.
-- TuRBO's value is asymmetric: clear payoffs when real structure is there to find (regression streaks broken, climbing trajectories continued), but it can fall off when the function is genuinely flat. The state machine contracts the trust region after failures so the next bet is cheaper.
+- TuRBO's value is asymmetric: clear payoffs when real structure is there to find, but it can fall off when the function is genuinely flat. The state machine contracts the trust region after failures so the next bet is cheaper.

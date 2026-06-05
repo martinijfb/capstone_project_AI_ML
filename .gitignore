@@ -16,3 +16,9 @@ __pycache__/
 
 # Draft files
 capstone_readme_draft.*
+
+# Reflections
+reflections/
+
+# Suggestions
+suggestions/
