@@ -4,10 +4,10 @@
   "L_init": 0.8,
   "L_min": 0.0078125,
   "L_max": 1.6,
-  "success_counter": 0,
-  "failure_counter": 3,
+  "success_counter": 1,
+  "failure_counter": 0,
   "success_tolerance": 3,
   "failure_tolerance": 4,
-  "best_value": 6125.591989074947,
+  "best_value": 7663.598016238331,
   "restart_count": 0
 }

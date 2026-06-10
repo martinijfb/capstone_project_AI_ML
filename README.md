@@ -45,24 +45,20 @@ The limited budget means brute-force grid search is infeasible. Each query must 
 My approach centres on a **validate-then-trust** framework: fit multiple surrogate models, validate each via Leave-One-Out Cross-Validation (LOOCV RMSE), and only trust models that beat the standard-deviation baseline.
 
 **ML methods used:**
-- **GridSearchCV with LOOCV** across 7 sklearn families: Ridge, KNN, Random Forest, SVR (RBF), Gradient Boosting, Gaussian Process with Matern at ν ∈ {0.5, 1.5, 2.5} and RBF, plus PyTorch MLP surrogates.
-- **Output warping (Yeo-Johnson)** for skewed but bounded targets; **BoTorch second opinions** (`SingleTaskGP` + GP-UCB + qLogNoisyEI) as informational signals.
-- **TuRBO-1 trust region (multi-kernel TS)**: fits four GPs (Matern 0.5/1.5/2.5, RBF), draws Thompson samples at shared candidates, picks argmax across the (kernel, candidate) grid. Trust-region length adapts via success/failure counters; state persists across weeks via JSON.
-- **F1-specific classifier + log-SVR** decomposition. **Feature importance robustness, outlier-suggestion filter, boundary-consensus rule, NN autograd gradients** continue from earlier weeks.
+- **GridSearchCV with LOOCV** across 7 sklearn families: Ridge, KNN, Random Forest, SVR (RBF), Gradient Boosting, Gaussian Process with Matern at ν ∈ {0.5, 1.5, 2.5} and RBF, plus PyTorch MLP surrogates. ARD (per-dimension lengthscale) GP variants added for local refinement.
+- **Structural transforms**: a Gaussian-magnitude model `f = h(x)·exp(quadratic)` for the sign-flipping function, and a ceiling transform `ln(C−Y)` for the function that saturates toward a cap. Both expose shape the raw-Y models miss.
+- **Output warping (Yeo-Johnson)**, **BoTorch second opinions**, **noise-aware GPs (WhiteKernel)** for the one stochastic function, and an **F1 classifier + log-SVR** decomposition.
+- **TuRBO-1 trust region (multi-kernel TS)** for still-climbing functions.
 
 **Strategy selection per function:**
-By week 10 the eight functions cluster into three regimes:
-- **Climbing**: TuRBO continuation. Multi-kernel TS picks a different winning kernel per function and per week.
-- **Models converged**: per-dim hybrid — ensemble where models agree (STRONG-consensus dims), top-K centroid where they disagree, with deterministic anchors where the data shows one.
-- **Stalled**: smallest available step around the current best, leaning on cross-model consensus rather than any single confident pick.
+Each function is read by its landscape shape:
+- **Climbing**: TuRBO continuation (multi-kernel TS picks a different kernel per week).
+- **Single peak / pit / plateau**: multi-GP local consensus — average several kernel variants' argmaxes inside a trust radius matched to that function's measured tolerance, anchoring dimensions where the data is unambiguous.
+- **Saturated refinement**: Expected Improvement to redirect toward unexplored neighbouring regions.
 
-Triggers for switching to TuRBO: standard step < 0.005 on a climbing trajectory, or 2 consecutive regressions.
-
-**Key learnings after 10 rounds:**
-- Single-model dominance is not sufficient even at very high CV margin; multi-model consensus is the standing gate.
-- Kernel smoothness is per-function. Multi-kernel TS earns its cost because the winning kernel changes by function and by week.
-- Transform research on F1 found `log|Y|` fits +68% above baseline vs raw Y at +47% — magnitude is smooth, sign is chaotic. Signed-log extrapolation produces nonsense argmax candidates.
-- A deliberate small-step query near the current best resolves "refinement vs noise" ambiguity for the entire downstream search.
-- Output warping helps where Y is skewed but bounded; useless on extreme dynamic ranges.
-- NN surrogates rarely top the leaderboard at these sample sizes; their main value is the autograd gradient as a directional hint.
-- TuRBO's value is asymmetric: clear payoffs when real structure is there to find, but it can fall off when the function is genuinely flat. The state machine contracts the trust region after failures so the next bet is cheaper.
+**Key learnings after 11 rounds:**
+- Functions are deterministic except one, which is stochastic (σ≈0.06) — confirmed by exact-repeat queries; that one needs noise-aware GPs and a P(beat) acquisition.
+- TuRBO is the right tool only when its step scale matches the landscape. On a unimodal pit (output falling with distance from the best) its large steps are guaranteed losses, so it was retired there for local consensus.
+- Single-model dominance is never enough; consensus across kernel variants inside a safe radius is the standing gate.
+- Structural transforms (log-magnitude, ceiling) can reveal exploitable shape that raw-Y regression flattens out.
+- Distance is the unifying idea: choosing a query is a clustering decision about which region a candidate belongs to.
