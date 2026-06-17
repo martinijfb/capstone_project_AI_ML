@@ -45,20 +45,22 @@ The limited budget means brute-force grid search is infeasible. Each query must 
 My approach centres on a **validate-then-trust** framework: fit multiple surrogate models, validate each via Leave-One-Out Cross-Validation (LOOCV RMSE), and only trust models that beat the standard-deviation baseline.
 
 **ML methods used:**
-- **GridSearchCV with LOOCV** across 7 sklearn families: Ridge, KNN, Random Forest, SVR (RBF), Gradient Boosting, Gaussian Process with Matern at ν ∈ {0.5, 1.5, 2.5} and RBF, plus PyTorch MLP surrogates. ARD (per-dimension lengthscale) GP variants added for local refinement.
+- **GridSearchCV with LOOCV** across 7 sklearn families: Ridge, KNN, Random Forest, SVR (RBF), Gradient Boosting, Gaussian Process with Matern at ν ∈ {0.5, 1.5, 2.5} and RBF, plus PyTorch MLP surrogates. ARD (per-dimension lengthscale) GP variants for local refinement.
 - **Structural transforms**: a Gaussian-magnitude model `f = h(x)·exp(quadratic)` for the sign-flipping function, and a ceiling transform `ln(C−Y)` for the function that saturates toward a cap. Both expose shape the raw-Y models miss.
-- **Output warping (Yeo-Johnson)**, **BoTorch second opinions**, **noise-aware GPs (WhiteKernel)** for the one stochastic function, and an **F1 classifier + log-SVR** decomposition.
-- **TuRBO-1 trust region (multi-kernel TS)** for still-climbing functions.
+- **Output warping (Yeo-Johnson)**, **BoTorch second opinions**, optional **WhiteKernel** GPs, and an **F1 classifier + log-SVR** decomposition.
+- **TuRBO-1 trust region (multi-kernel TS)** — built the biggest early-round gains, now retired in favour of local consensus once trajectories saturated.
 
 **Strategy selection per function:**
 Each function is read by its landscape shape:
-- **Climbing**: TuRBO continuation (multi-kernel TS picks a different kernel per week).
-- **Single peak / pit / plateau**: multi-GP local consensus — average several kernel variants' argmaxes inside a trust radius matched to that function's measured tolerance, anchoring dimensions where the data is unambiguous.
-- **Saturated refinement**: Expected Improvement to redirect toward unexplored neighbouring regions.
+- **Converged peak / pit / plateau**: multi-GP local consensus — average several kernel variants' argmaxes inside a trust radius matched to that function's measured tolerance, anchoring dimensions where the data is unambiguous.
+- **Saturated region**: Expected Improvement to redirect toward unexplored neighbouring regions.
+- **Special structure**: the Gaussian-magnitude and ceiling models drive the two hardest functions.
 
-**Key learnings after 11 rounds:**
-- Functions are deterministic except one, which is stochastic (σ≈0.06) — confirmed by exact-repeat queries; that one needs noise-aware GPs and a P(beat) acquisition.
-- TuRBO is the right tool only when its step scale matches the landscape. On a unimodal pit (output falling with distance from the best) its large steps are guaranteed losses, so it was retired there for local consensus.
+**Exploration vs exploitation:** late rounds are exploitation-led — recentre on each new best and tighten — keeping one or two exploratory cards for functions that still have headroom.
+
+**Key learnings after 12 rounds:**
+- When a method wins, recentre and continue it; when it fails twice or its failure exposes a structural mismatch, retire it. TuRBO followed exactly this arc.
 - Single-model dominance is never enough; consensus across kernel variants inside a safe radius is the standing gate.
-- Structural transforms (log-magnitude, ceiling) can reveal exploitable shape that raw-Y regression flattens out.
-- Distance is the unifying idea: choosing a query is a clustering decision about which region a candidate belongs to.
+- Structural transforms (log-magnitude, ceiling) reveal exploitable shape that raw-Y regression flattens out.
+- Match the step size to each function's measured tolerance; the safe radius differs per function.
+- Most improvement lives in one or two dimensions per function; pin the rest.
