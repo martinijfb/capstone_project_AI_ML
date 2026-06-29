@@ -48,19 +48,19 @@ My approach centres on a **validate-then-trust** framework: fit multiple surroga
 - **GridSearchCV with LOOCV** across 7 sklearn families: Ridge, KNN, Random Forest, SVR (RBF), Gradient Boosting, Gaussian Process with Matern at ν ∈ {0.5, 1.5, 2.5} and RBF, plus PyTorch MLP surrogates. ARD (per-dimension lengthscale) GP variants for local refinement.
 - **Structural transforms**: a Gaussian-magnitude model `f = h(x)·exp(quadratic)` for the sign-flipping function, and a ceiling transform `ln(C−Y)` for the function that saturates toward a cap. Both expose shape the raw-Y models miss.
 - **Output warping (Yeo-Johnson)**, **BoTorch second opinions**, optional **WhiteKernel** GPs, and an **F1 classifier + log-SVR** decomposition.
-- **TuRBO-1 trust region (multi-kernel TS)** — built the biggest early-round gains, now retired in favour of local consensus once trajectories saturated.
+- **TuRBO-1 trust region (multi-kernel TS)** — built the biggest early-round gains, then fully retired for local consensus once trajectories saturated.
 
 **Strategy selection per function:**
 Each function is read by its landscape shape:
 - **Converged peak / pit / plateau**: multi-GP local consensus — average several kernel variants' argmaxes inside a trust radius matched to that function's measured tolerance, anchoring dimensions where the data is unambiguous.
-- **Saturated region**: Expected Improvement to redirect toward unexplored neighbouring regions.
+- **Monotone climb**: take the confirmed boundary optimum when the trajectory and all models agree.
 - **Special structure**: the Gaussian-magnitude and ceiling models drive the two hardest functions.
 
-**Exploration vs exploitation:** late rounds are exploitation-led — recentre on each new best and tighten — keeping one or two exploratory cards for functions that still have headroom.
+**Exploration vs exploitation:** the project ran a clean arc from broad exploration to near-pure exploitation. The final round banks the best defensible point per function, spending exploration budget only where the banked result was already unbeatable by refinement, so the gamble had zero downside.
 
-**Key learnings after 12 rounds:**
+**Key learnings after 13 rounds (final):**
 - When a method wins, recentre and continue it; when it fails twice or its failure exposes a structural mismatch, retire it. TuRBO followed exactly this arc.
 - Single-model dominance is never enough; consensus across kernel variants inside a safe radius is the standing gate.
 - Structural transforms (log-magnitude, ceiling) reveal exploitable shape that raw-Y regression flattens out.
 - Match the step size to each function's measured tolerance; the safe radius differs per function.
-- Most improvement lives in one or two dimensions per function; pin the rest.
+- Read each function by its landscape shape rather than applying one recipe to all eight.
